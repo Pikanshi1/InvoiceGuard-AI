@@ -1,0 +1,463 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MANAGER
+  FINANCE
+  EMPLOYEE
+  AUDITOR
+}
+
+enum RecordStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+  PAID
+  CANCELLED
+  REVIEW
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_INFO
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  emailVerified Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  memberships  Membership[]
+  sessions     Session[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  auditEvents  AuditEvent[]
+  approvals    Approval[]    @relation("Approver")
+  createdInvoices Invoice[]  @relation("InvoiceCreator")
+  invitations  Invitation[]
+  notifications Notification[]
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model Workspace {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  currency    String       @default("INR")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  vendors     Vendor[]
+  budgets     Budget[]
+  requests    PurchaseRequest[]
+  quotations  Quotation[]
+  orders      PurchaseOrder[]
+  invoices    Invoice[]
+  receipts    GoodsReceipt[]
+  approvals   Approval[]
+  payments    Payment[]
+  payPalWebhookEvents PayPalWebhookEvent[]
+  auditEvents AuditEvent[]
+  policies    SecurityPolicy[]
+  riskCases   RiskCase[]
+  invitations Invitation[]
+  notifications Notification[]
+  agreements  Agreement[]
+  vendorDocuments VendorDocument[]
+  quotationDocuments QuotationDocument[]
+}
+
+model Membership {
+  id          String        @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        WorkspaceRole @default(EMPLOYEE)
+  createdAt   DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([userId, workspaceId])
+  @@index([workspaceId, role])
+}
+
+model Invitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  tokenHash   String        @unique
+  role        WorkspaceRole @default(EMPLOYEE)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  invitedById String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User         @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  @@index([workspaceId, email])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  title       String
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, readAt, createdAt])
+}
+
+model Vendor {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  normalizedName   String
+  email            String?
+  taxId            String?
+  bankAccountLast4 String?
+  verificationNote String?
+  verified         Boolean  @default(false)
+  riskScore        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  quotations       Quotation[]
+  orders           PurchaseOrder[]
+  invoices         Invoice[]
+  documents      VendorDocument[]
+  agreements     Agreement[]
+  @@unique([workspaceId, normalizedName])
+  @@index([workspaceId, name])
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  workspaceId String
+  department  String
+  period      String
+  amount      Decimal  @db.Decimal(18, 2)
+  spent       Decimal  @default(0) @db.Decimal(18, 2)
+  currency    String   @default("INR")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, department, period])
+}
+
+model PurchaseRequest {
+  id          String       @id @default(cuid())
+  workspaceId String
+  requesterId String
+  title       String
+  description String
+  department  String
+  amount      Decimal      @db.Decimal(18, 2)
+  currency    String       @default("INR")
+  status      RecordStatus @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  quotations  Quotation[]
+  orders      PurchaseOrder[]
+  @@index([workspaceId, status])
+}
+
+model Quotation {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  purchaseRequestId String
+  vendorId        String
+  amount          Decimal  @db.Decimal(18, 2)
+  deliveryDays    Int?
+  notes           String?
+  createdAt       DateTime @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vendor          Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  orders          PurchaseOrder[]
+  documents       QuotationDocument[]
+  @@index([workspaceId, purchaseRequestId])
+}
+
+model VendorDocument {
+  id          String   @id @default(cuid())
+  workspaceId String
+  vendorId    String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  contentHash String
+  storagePath String
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vendor      Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, vendorId, createdAt])
+}
+
+model QuotationDocument {
+  id          String   @id @default(cuid())
+  workspaceId String
+  quotationId String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  contentHash String
+  storagePath String
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, quotationId, createdAt])
+}
+
+model Agreement {
+  id          String       @id @default(cuid())
+  workspaceId String
+  vendorId    String?
+  name        String
+  description String?
+  status      RecordStatus @default(DRAFT)
+  startDate   DateTime?
+  expiresAt   DateTime?
+  documentUrl String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vendor      Vendor?      @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  @@index([workspaceId, status, expiresAt])
+}
+
+model PurchaseOrder {
+  id                String       @id @default(cuid())
+  workspaceId       String
+  vendorId          String
+  purchaseRequestId String?
+  quotationId       String?
+  poNumber          String
+  amount            Decimal      @db.Decimal(18, 2)
+  currency          String       @default("INR")
+  status            RecordStatus @default(DRAFT)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vendor            Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  purchaseRequest  PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+  quotation        Quotation?      @relation(fields: [quotationId], references: [id])
+  invoices          Invoice[]
+  receipts          GoodsReceipt[]
+  @@unique([workspaceId, poNumber])
+  @@index([workspaceId, quotationId])
+}
+
+model GoodsReceipt {
+  id          String   @id @default(cuid())
+  workspaceId String
+  purchaseOrderId String
+  reference   String
+  orderedQty  Int
+  receivedQty Int
+  acceptedQty Int
+  notes       String?
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, purchaseOrderId])
+}
+
+model Invoice {
+  id              String       @id @default(cuid())
+  workspaceId     String
+  vendorId        String
+  purchaseOrderId String?
+  invoiceNumber   String
+  issueDate       DateTime?
+  dueDate         DateTime?
+  amount          Decimal      @db.Decimal(18, 2)
+  taxAmount       Decimal      @default(0) @db.Decimal(18, 2)
+  currency        String       @default("INR")
+  status          RecordStatus @default(PENDING)
+  riskLevel       RiskLevel    @default(LOW)
+  riskScore       Int          @default(0)
+  extractedData   Json?
+  documentHash    String?
+  createdById     String?
+  evaluatedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vendor          Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  createdBy       User?        @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  approvals       Approval[]
+  payments        Payment[]
+  riskCases       RiskCase[]
+  documents       InvoiceDocument[]
+  @@unique([workspaceId, vendorId, invoiceNumber])
+  @@index([workspaceId, status, createdAt])
+  @@index([createdById])
+}
+
+model InvoiceDocument {
+  id           String   @id @default(cuid())
+  invoiceId    String
+  version      Int
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  contentHash  String
+  storagePath  String
+  createdAt    DateTime @default(now())
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  @@unique([invoiceId, version])
+  @@index([invoiceId, createdAt])
+}
+
+model Approval {
+  id          String         @id @default(cuid())
+  workspaceId String
+  invoiceId   String?
+  approverId  String?
+  status      ApprovalStatus @default(PENDING)
+  note        String?
+  createdAt   DateTime       @default(now())
+  decidedAt   DateTime?
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invoice     Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  approver    User?         @relation("Approver", fields: [approverId], references: [id])
+  @@index([workspaceId, status])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  workspaceId String
+  invoiceId   String
+  provider    String        @default("PAYPAL_SANDBOX")
+  providerRef String?
+  amount      Decimal       @db.Decimal(18, 2)
+  currency    String        @default("INR")
+  status      PaymentStatus @default(CREATED)
+  idempotencyKey String    @unique
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  @@index([workspaceId, status])
+  @@unique([workspaceId, providerRef])
+}
+
+model PayPalWebhookEvent {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  eventId     String   @unique
+  eventType   String
+  receivedAt  DateTime @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  @@index([workspaceId, receivedAt])
+}
+
+model SecurityPolicy {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  enabled     Boolean  @default(true)
+  config      Json
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, enabled])
+}
+
+model RiskCase {
+  id          String    @id @default(cuid())
+  workspaceId String
+  invoiceId   String?
+  title       String
+  description String
+  severity    RiskLevel
+  status      String    @default("OPEN")
+  resolution  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invoice     Invoice?  @relation(fields: [invoiceId], references: [id])
+  @@index([workspaceId, status, severity])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorId     String?
+  entityType  String
+  entityId    String
+  action      String
+  metadata    Json?
+  previousHash String?
+  eventHash   String
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User?    @relation(fields: [actorId], references: [id])
+  @@index([workspaceId, createdAt])
+}

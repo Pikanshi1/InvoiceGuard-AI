@@ -1,0 +1,26 @@
+{
+  "name": "invoiceguard-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InvoiceGuard AI full-stack procurement and payment security platform",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@invoiceguard/api && npm run build --workspace=@invoiceguard/web",
+    "test": "npm run test --workspace=@invoiceguard/api",
+    "dev": "npm run dev --workspace=@invoiceguard/api",
+    "db:generate": "npm run db:generate --prefix backend",
+    "db:migrate:deploy": "npm run db:migrate:deploy --prefix backend"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.0",
+    "next": {
+      "postcss": "8.5.32"
+    }
+  }
+}

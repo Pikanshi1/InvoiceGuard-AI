@@ -1,0 +1,21 @@
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+.DS_Store
+storage/
+
+# Generated TypeScript build information
+*.tsbuildinfo
+# Environment secrets (never commit)
+
+# Never commit environment files
+.env*
+
+!.env.example

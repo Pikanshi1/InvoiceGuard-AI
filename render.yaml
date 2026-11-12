@@ -1,0 +1,71 @@
+# Render Blueprint for the InvoiceGuard-AI feature branch.
+# Review names, region, plan, environment values, and disk pricing before syncing.
+# This file does not create or migrate a Neon database.
+services:
+  - type: web
+    name: invoiceguard-api
+    runtime: docker
+    plan: starter
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WEB_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: DOCUMENT_STORAGE_PATH
+        value: /app/storage/invoices
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_SENDER_EMAIL
+        sync: false
+      - key: ELASTIC_URL
+        sync: false
+      - key: ELASTIC_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+    # Invoice uploads require durable storage. Render persistent disks require
+    # a compatible paid service plan; confirm the plan and cost before syncing.
+    disk:
+      name: invoiceguard-documents
+      mountPath: /app/storage
+      sizeGB: 10
+
+  - type: web
+    name: invoiceguard-web
+    runtime: docker
+    plan: starter
+    branch: main
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    autoDeployTrigger: off
+    envVars:
+      # This is a public, build-time URL; set it to the deployed API origin.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
